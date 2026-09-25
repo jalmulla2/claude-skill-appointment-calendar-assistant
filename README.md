@@ -1,6 +1,6 @@
-# Appointment & Calendar Assistant (Claude Code Skill)
+# Appointment & Calendar Assistant — Claude Skill
 
-A [Claude Code](https://claude.com/claude-code) skill that reads appointment messages, invitation photos, and notices, then adds them to your calendar with the right title, duration, and reminders — no manual entry needed.
+A [Claude skill](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) that reads appointment messages, invitation photos, and notices, then adds them to your calendar with the right title, duration, and reminders — no manual entry needed.
 
 Handles:
 - Hospital / clinic appointments
@@ -15,9 +15,9 @@ Handles:
 
 ## Install
 
-1. Copy the `appointment-calendar-assistant` folder into your Claude skills directory:
+1. Clone it into your Claude skills directory (the folder must be named `appointment-calendar-assistant`):
    ```bash
-   cp -r appointment-calendar-assistant ~/.claude/skills/appointment-calendar-assistant
+   git clone https://github.com/jalmulla2/claude-skill-appointment-calendar-assistant.git ~/.claude/skills/appointment-calendar-assistant
    ```
 2. Restart Claude Code / Claude Desktop.
 3. The first time you trigger the skill (e.g. "add this appointment to my calendar"), it will ask you which calendar to use, your timezone, and your city — then remember your answers for next time. Nothing is pre-configured; it's the same skill for everyone until you set it up.
