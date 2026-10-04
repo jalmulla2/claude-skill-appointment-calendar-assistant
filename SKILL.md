@@ -37,7 +37,7 @@ Before doing anything else, check whether `~/.claude/skills/appointment-calendar
 3. Ask for their timezone as a UTC offset (e.g. `+03:00`). If the calendar tool exposes a timezone for the account/calendar, propose it and just ask them to confirm.
 4. Ask for the city they live in. Explain why: it's only used to look up accurate prayer times when logging a funeral/burial notice — skip this question if the user says they won't need the funeral-notice feature.
 5. Ask which عزاء they attend — **men's or women's**. Funeral notices list separate venues and often separate hours for each, and the answer also decides whether the burial is added at all (see Funeral Notices below). Skip this question too if they said they won't need the funeral-notice feature.
-6. Ask for their **work email address and their working hours**, and explain why: anything landing inside those hours is invited to the work address so the slot also blocks their work calendar. Leave `workEmail` unset if they decline; default `workHours` to 07:00–14:00 if they don't specify.
+6. Ask whether their **work calendar already subscribes to a personal calendar** (then `workBlocking: "subscribed"` plus which calendars it shows, and no invitations are ever sent); otherwise ask for their **work email address and their working hours**, and explain why: anything landing inside those hours is invited to the work address so the slot also blocks their work calendar. Leave `workEmail` unset if they decline; default `workHours` to 07:00–14:00 if they don't specify.
 7. Write the answers to `~/.claude/skills/appointment-calendar-assistant/config.json`:
    ```json
    {
@@ -50,7 +50,10 @@ Before doing anything else, check whether `~/.claude/skills/appointment-calendar
      "city": "<city, or null if skipped>",
      "azaAttends": "men" | "women",
      "workEmail": "<work email, or null if skipped>",
-     "workHours": { "start": "07:00", "end": "14:00" }
+     "workHours": { "start": "07:00", "end": "14:00" },
+     "workDays": ["Sun", "Mon", "Tue", "Wed", "Thu"],
+     "workBlocking": "invite" | "subscribed",
+     "workVisibleCalendars": ["personal"]
    }
    ```
    Omit `family` and `events` entirely if the user keeps everything on one calendar.
@@ -70,7 +73,7 @@ Each event-type rule below names a **role**: `{personal}`, `{family}` or `{event
 
 So a single-calendar user gets every event on their one calendar with no extra prompting, and a user with separate calendars gets each event routed to the right one. **Never ask which calendar to use at event-creation time** — the config already answers it.
 
-`{timezone}`, `{city}`, `{workEmail}` and `{workHours}` come from the same file; funeral/burial prayer-time lookups use `{city}`.
+`{timezone}`, `{city}`, `{workEmail}`, `{workHours}`, `{workDays}`, `{workBlocking}` and `{workVisibleCalendars}` come from the same file; funeral/burial prayer-time lookups use `{city}`.
 
 ---
 
@@ -78,7 +81,9 @@ So a single-calendar user gets every event on their one calendar with no extra p
 
 This rule is not tied to any one category. Check it for every single event before creating it, whatever kind it is — hospital appointment, interview, wedding, dinner, burial, aza.
 
-**If the event's start time falls inside `{workHours}` (default 07:00–14:00 local) on a working day, and `{workEmail}` is set, invite the work address:**
+**First check `{workBlocking}`.** If it is `"subscribed"`, the work calendar already shows the calendars listed in `{workVisibleCalendars}`, so **never invite the work address, for any event**. Instead, an event inside work hours that should block work time goes on a visible calendar (usually Personal). If it belongs on a calendar the work side can't see (Family, Personal Events), say in one line that it won't show at work and offer to put it on a visible calendar; don't move it silently. The invitation steps below do not apply, and the report says "shows at work via subscription" rather than "invitation sent".
+
+**Otherwise (`{workBlocking}` unset or `"invite"`):** if the event's start time falls inside `{workHours}` (default 07:00–14:00 local) on a working day, and `{workEmail}` is set, invite the work address:
 
 ```
 attendees: [{ email: "{workEmail}", responseStatus: "needsAction" }]
@@ -225,7 +230,7 @@ When creating it:
 - Title: `دفان [First Name] [Father Name] [Last Name]`
 - Reminders: **at the event time only** — no advance reminders
 - Availability: **free** (`AVAILABILITY_FREE`) — must not block time on the personal calendar
-- A Dhuhr burial commonly falls inside `{workHours}` — apply the working-hours rule and invite the work address
+- A Dhuhr burial commonly falls inside `{workHours}` — apply the working-hours rule (invite the work address, or rely on the subscription when `{workBlocking}` is `subscribed`)
 
 #### B) Condolence / عزاء (3 consecutive days)
 
@@ -263,7 +268,7 @@ Create **3 separate calendar entries**, one per day, labeled:
 4. **Funerals — check `{azaAttends}` before creating anything.** If it is `women`, create only the three عزاء days, on the women's schedule and at the women's venue; no burial event. If it is `men`, create the burial plus the three days. Either way, look up the burial prayer time — Day 1 counting depends on it.
 5. **Date anchoring for funerals:** Burial and aza always refer to the same day or recent past — never assume "next week". If the message says "اليوم الاثنين" or just "الاثنين" and today is Monday or Tuesday, it means this Monday just passed or today. If the burial prayer has already occurred relative to now, that's fine — still create the entries (aza days may still be upcoming).
 6. **Apply the defaults** from the relevant section above
-7. **Check the working-hours rule for every event** — does its start time fall inside `{workHours}`? If yes and `{workEmail}` is set, it carries a work invitation. This check is per event: in a three-day aza, one day may qualify and the others not.
+7. **Check the working-hours rule for every event** — does its start time fall inside `{workHours}`? If yes: with `{workBlocking}` = `subscribed`, make sure it is on a visible calendar and send no invitation; otherwise, if `{workEmail}` is set, it carries a work invitation. This check is per event: in a three-day aza, one day may qualify and the others not.
 8. **Confirm with the user** only if a critical detail is genuinely ambiguous (e.g., unclear who a hospital appointment is for)
 9. **Create the event(s)** using the calendar tool's create-event function with:
    - `calendarId`: the role resolved for this event type (see **Resolving a calendar**)
@@ -274,7 +279,7 @@ Create **3 separate calendar entries**, one per day, labeled:
    - When the working-hours rule applies: `attendees` carrying `{workEmail}` as `needsAction`, `notificationLevel: "ALL"` so the invitation is actually sent, and `visibility: "private"`
    - `availability`: `AVAILABILITY_FREE` for burial and aza entries; leave it at the default (busy) for everything else
 10. **Verify what was created.** Read each event back and check calendar, date and time (in `{timezone}`), location, reminders, availability, attendee list and description rendered as intended — don't report success from the create call alone. **If anything differs, correct it with the calendar tool's update function and return to this step.**
-11. **Report** one line per event: title, date and time, calendar, and whether a work invitation went out (and that accepting it is what blocks the time).
+11. **Report** one line per event: title, date and time, calendar, and how it reaches work: "shows at work via subscription", "invitation sent" (accepting it is what blocks the time), or "not at work".
 
 ### Checklist
 
